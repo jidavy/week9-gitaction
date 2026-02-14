@@ -20,26 +20,21 @@ provider "aws" {
 }
 
 # ------------------------------------------------------------------
-# DYNAMIC AMI DISCOVERY (The "Hands-Off" Secret)
+# FREE TIER AMI DISCOVERY (Ubuntu 22.04 LTS)
 # ------------------------------------------------------------------
 
-# Find the latest Nginx AMI built by Packer
-data "aws_ami" "nginx_latest" {
+data "aws_ami" "ubuntu_latest" {
   most_recent = true
-  owners      = ["self"]
-  filter {
-    name   = "name"
-    values = ["nginx-git-by-packer-*"]
-  }
-}
+  owners      = ["099720109477"] # Canonical/Ubuntu Official
 
-# Find the latest Java AMI built by Packer
-data "aws_ami" "java_latest" {
-  most_recent = true
-  owners      = ["self"]
   filter {
     name   = "name"
-    values = ["java-git-by-packer-*"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
   }
 }
 
@@ -47,7 +42,6 @@ data "aws_ami" "java_latest" {
 # SECURITY GROUPS
 # ------------------------------------------------------------------
 
-# Web Node Security Group (Frontend)
 resource "aws_security_group" "web_sg" {
   name        = "web-sg"
   description = "Allow SSH and Port 80 inbound"
@@ -79,7 +73,6 @@ resource "aws_security_group" "web_sg" {
   tags = { Name = "web-security_group" }
 }
 
-# Backend Security Group (Python & Java)
 resource "aws_security_group" "backend_sg" {
   name        = "backend-sg"
   description = "Allow SSH and Backend Ports"
@@ -93,7 +86,6 @@ resource "aws_security_group" "backend_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Python App Port (Per task requirements)
   ingress {
     description = "Python App"
     from_port   = 8080
@@ -102,7 +94,6 @@ resource "aws_security_group" "backend_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Java App Port (Per task requirements)
   ingress {
     description = "Java App"
     from_port   = 9090
@@ -122,42 +113,40 @@ resource "aws_security_group" "backend_sg" {
 }
 
 # ------------------------------------------------------------------
-# EC2 INSTANCES
+# EC2 INSTANCES (Using Free Tier Ubuntu AMI)
 # ------------------------------------------------------------------
 
 # Node 1: Java Node
 resource "aws_instance" "java-node" {
-  ami                    = data.aws_ami.java_latest.id
+  ami                    = data.aws_ami.ubuntu_latest.id
   instance_type          = var.project_instance_type
   subnet_id              = var.project_subnet
   vpc_security_group_ids = [aws_security_group.backend_sg.id]
   key_name               = var.project_keyname
 
-  tags = { Name = "Java-Node" } # Required per Task 
+  tags = { Name = "Java-Node" } 
 }
 
 # Node 2: Nginx Node
 resource "aws_instance" "nginx-node" {
-  ami                    = data.aws_ami.nginx_latest.id
+  ami                    = data.aws_ami.ubuntu_latest.id
   instance_type          = var.project_instance_type
   subnet_id              = var.project_subnet
   vpc_security_group_ids = [aws_security_group.web_sg.id]
   key_name               = var.project_keyname
 
-  tags = { Name = "Nginx-Node" } # Required per Task 
+  tags = { Name = "Nginx-Node" } 
 }
 
 # Node 3: Ansible Server
 resource "aws_instance" "ansible-server" {
-  # If you don't have an 'ansible_latest' data source, 
-  # use one of your other AMIs or a standard one.
-  ami                    = data.aws_ami.java_latest.id 
+  ami                    = data.aws_ami.ubuntu_latest.id
   instance_type          = var.project_instance_type
   subnet_id              = var.project_subnet
   vpc_security_group_ids = [aws_security_group.backend_sg.id]
   key_name               = var.project_keyname
 
-  tags = { Name = "Ansible-Server" } # Required per Task 
+  tags = { Name = "Ansible-Server" } 
 }
 
 # ------------------------------------------------------------------
@@ -165,16 +154,13 @@ resource "aws_instance" "ansible-server" {
 # ------------------------------------------------------------------
 
 output "Node_1_Java_IP" {
-  description = "Public IP of the Java Node"
-  value       = aws_instance.java-node.public_ip
+  value = aws_instance.java-node.public_ip
 }
 
 output "Node_2_Nginx_IP" {
-  description = "Public IP of the Nginx Node"
-  value       = aws_instance.nginx-node.public_ip
+  value = aws_instance.nginx-node.public_ip
 }
 
 output "Node_3_Ansible_Server_IP" {
-  description = "Public IP of the Ansible Control Server"
-  value       = aws_instance.ansible-server.public_ip
+  value = aws_instance.ansible-server.public_ip
 }
