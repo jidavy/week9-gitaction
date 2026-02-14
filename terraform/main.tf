@@ -20,36 +20,23 @@ provider "aws" {
 }
 
 # ------------------------------------------------------------------
-# DYNAMIC AMI DISCOVERY (Role-Based Search)
+# DYNAMIC AMI DISCOVERY (Amazon Linux 2023 - Official AWS)
 # ------------------------------------------------------------------
 
-# Find the latest Nginx-related AMI
-data "aws_ami" "nginx_latest" {
+# This replaces the Packer searches. It finds the latest official 
+# Amazon Linux 2023 AMI which is Free Tier eligible.
+data "aws_ami" "amazon_linux_2023" {
   most_recent = true
-  owners      = ["self"] 
-  filter {
-    name   = "name"
-    # Matches any image name containing 'nginx'
-    values = ["*nginx*"] 
-  }
-  filter {
-    name   = "state"
-    values = ["available"]
-  }
-}
+  owners      = ["amazon"]
 
-# Find the latest Java-related AMI
-data "aws_ami" "java_latest" {
-  most_recent = true
-  owners      = ["self"]
   filter {
     name   = "name"
-    # Matches any image name containing 'java'
-    values = ["*java*"]
+    values = ["al2023-ami-2023*-x86_64"]
   }
+
   filter {
-    name   = "state"
-    values = ["available"]
+    name   = "architecture"
+    values = ["x86_64"]
   }
 }
 
@@ -59,10 +46,11 @@ data "aws_ami" "java_latest" {
 
 resource "aws_security_group" "web_sg" {
   name        = "web-sg"
-  description = "Allow SSH and Port 80"
+  description = "Allow SSH and Port 80 inbound" # Description matched to avoid recreation
   vpc_id      = var.project_vpc
 
   ingress {
+    description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -70,6 +58,7 @@ resource "aws_security_group" "web_sg" {
   }
 
   ingress {
+    description = "Web port 80"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -82,14 +71,17 @@ resource "aws_security_group" "web_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = { Name = "web-security_group" }
 }
 
 resource "aws_security_group" "backend_sg" {
   name        = "backend-sg"
-  description = "Allow SSH and App Ports"
+  description = "Allow SSH and Backend Ports" # Description matched to avoid recreation
   vpc_id      = var.project_vpc
 
   ingress {
+    description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -97,7 +89,7 @@ resource "aws_security_group" "backend_sg" {
   }
 
   ingress {
-    description = "Python/App Port"
+    description = "Python App"
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
@@ -105,7 +97,7 @@ resource "aws_security_group" "backend_sg" {
   }
 
   ingress {
-    description = "Java App Port"
+    description = "Java App"
     from_port   = 9090
     to_port     = 9090
     protocol    = "tcp"
@@ -118,15 +110,17 @@ resource "aws_security_group" "backend_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = { Name = "backend-security_group" }
 }
 
 # ------------------------------------------------------------------
-# EC2 INSTANCES (Task Nodes)
+# EC2 INSTANCES (Using Amazon Linux 2023 Data Source)
 # ------------------------------------------------------------------
 
 # Node 1: Java Node
 resource "aws_instance" "java-node" {
-  ami                    = data.aws_ami.java_latest.id
+  ami                    = data.aws_ami.amazon_linux_2023.id
   instance_type          = var.project_instance_type
   subnet_id              = var.project_subnet
   vpc_security_group_ids = [aws_security_group.backend_sg.id]
@@ -136,7 +130,7 @@ resource "aws_instance" "java-node" {
 
 # Node 2: Nginx Node
 resource "aws_instance" "nginx-node" {
-  ami                    = data.aws_ami.nginx_latest.id
+  ami                    = data.aws_ami.amazon_linux_2023.id
   instance_type          = var.project_instance_type
   subnet_id              = var.project_subnet
   vpc_security_group_ids = [aws_security_group.web_sg.id]
@@ -146,8 +140,7 @@ resource "aws_instance" "nginx-node" {
 
 # Node 3: Ansible Server
 resource "aws_instance" "ansible-server" {
-  # Using the Java base image to ensure it's a Linux environment for Ansible
-  ami                    = data.aws_ami.java_latest.id 
+  ami                    = data.aws_ami.amazon_linux_2023.id 
   instance_type          = var.project_instance_type
   subnet_id              = var.project_subnet
   vpc_security_group_ids = [aws_security_group.backend_sg.id]
