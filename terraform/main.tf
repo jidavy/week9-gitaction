@@ -125,51 +125,56 @@ resource "aws_security_group" "backend_sg" {
 # EC2 INSTANCES
 # ------------------------------------------------------------------
 
-# Node 1: Frontend (Nginx)
-resource "aws_instance" "web-node" {
+# Node 1: Java Node
+resource "aws_instance" "java-node" {
+  ami                    = data.aws_ami.java_latest.id
+  instance_type          = var.project_instance_type
+  subnet_id              = var.project_subnet
+  vpc_security_group_ids = [aws_security_group.backend_sg.id]
+  key_name               = var.project_keyname
+
+  tags = { Name = "Java-Node" } # Required per Task 
+}
+
+# Node 2: Nginx Node
+resource "aws_instance" "nginx-node" {
   ami                    = data.aws_ami.nginx_latest.id
   instance_type          = var.project_instance_type
   subnet_id              = var.project_subnet
   vpc_security_group_ids = [aws_security_group.web_sg.id]
   key_name               = var.project_keyname
 
-  tags = { Name = "web-node" }
+  tags = { Name = "Nginx-Node" } # Required per Task 
 }
 
-# Node 2: Backend (Python)
-resource "aws_instance" "python-node" {
-  ami                    = data.aws_ami.java_latest.id # Uses Java/Python image
+# Node 3: Ansible Server
+resource "aws_instance" "ansible-server" {
+  # If you don't have an 'ansible_latest' data source, 
+  # use one of your other AMIs or a standard one.
+  ami                    = data.aws_ami.java_latest.id 
   instance_type          = var.project_instance_type
   subnet_id              = var.project_subnet
   vpc_security_group_ids = [aws_security_group.backend_sg.id]
   key_name               = var.project_keyname
 
-  tags = { Name = "python-node" }
-}
-
-# Node 3: Backend (Java)
-resource "aws_instance" "ansible-node" {
-  ami                    = data.aws_ami.ansible_latest.id
-  instance_type          = var.project_instance_type
-  subnet_id              = var.project_subnet
-  vpc_security_group_ids = [aws_security_group.backend_sg.id]
-  key_name               = var.project_keyname
-
-  tags = { Name = "ansible-node" }
+  tags = { Name = "Ansible-Server" } # Required per Task 
 }
 
 # ------------------------------------------------------------------
 # OUTPUTS
 # ------------------------------------------------------------------
 
-output "web_node_ip" {
-  value = aws_instance.web-node.public_ip
+output "Node_1_Java_IP" {
+  description = "Public IP of the Java Node"
+  value       = aws_instance.java-node.public_ip
 }
 
-output "python_node_ip" {
-  value = aws_instance.python-node.public_ip
+output "Node_2_Nginx_IP" {
+  description = "Public IP of the Nginx Node"
+  value       = aws_instance.nginx-node.public_ip
 }
 
-output "ansible-node_ip" {
-  value = aws_instance.ansible-node.public_ip
+output "Node_3_Ansible_Server_IP" {
+  description = "Public IP of the Ansible Control Server"
+  value       = aws_instance.ansible-server.public_ip
 }
