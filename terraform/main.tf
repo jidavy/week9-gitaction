@@ -148,14 +148,14 @@ resource "aws_instance" "python-node" {
 }
 
 # Node 3: Backend (Java)
-resource "aws_instance" "java-node" {
-  ami                    = data.aws_ami.java_latest.id
+resource "aws_instance" "ansible-node" {
+  ami                    = data.aws_ami.ansible_latest.id
   instance_type          = var.project_instance_type
   subnet_id              = var.project_subnet
   vpc_security_group_ids = [aws_security_group.backend_sg.id]
   key_name               = var.project_keyname
 
-  tags = { Name = "java-node" }
+  tags = { Name = "ansible-node" }
 }
 
 # ------------------------------------------------------------------
@@ -170,6 +170,6 @@ output "python_node_ip" {
   value = aws_instance.python-node.public_ip
 }
 
-output "java_node_ip" {
-  value = aws_instance.java-node.public_ip
+output "ansible-node_ip" {
+  value = aws_instance.ansible-node.public_ip
 }
