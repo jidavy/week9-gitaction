@@ -20,21 +20,36 @@ provider "aws" {
 }
 
 # ------------------------------------------------------------------
-# FREE TIER AMI DISCOVERY (Ubuntu 22.04 LTS)
+# DYNAMIC AMI DISCOVERY (Role-Based Search)
 # ------------------------------------------------------------------
 
-data "aws_ami" "ubuntu_latest" {
+# Find the latest Nginx-related AMI
+data "aws_ami" "nginx_latest" {
   most_recent = true
-  owners      = ["099720109477"] # Canonical/Ubuntu Official
-
+  owners      = ["self"] 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+    # Matches any image name containing 'nginx'
+    values = ["*nginx*"] 
   }
-
   filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
+    name   = "state"
+    values = ["available"]
+  }
+}
+
+# Find the latest Java-related AMI
+data "aws_ami" "java_latest" {
+  most_recent = true
+  owners      = ["self"]
+  filter {
+    name   = "name"
+    # Matches any image name containing 'java'
+    values = ["*java*"]
+  }
+  filter {
+    name   = "state"
+    values = ["available"]
   }
 }
 
@@ -44,11 +59,10 @@ data "aws_ami" "ubuntu_latest" {
 
 resource "aws_security_group" "web_sg" {
   name        = "web-sg"
-  description = "Allow SSH and Port 80 inbound"
+  description = "Allow SSH and Port 80"
   vpc_id      = var.project_vpc
 
   ingress {
-    description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -56,7 +70,6 @@ resource "aws_security_group" "web_sg" {
   }
 
   ingress {
-    description = "Web port 80"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -69,17 +82,14 @@ resource "aws_security_group" "web_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  tags = { Name = "web-security_group" }
 }
 
 resource "aws_security_group" "backend_sg" {
   name        = "backend-sg"
-  description = "Allow SSH and Backend Ports"
+  description = "Allow SSH and App Ports"
   vpc_id      = var.project_vpc
 
   ingress {
-    description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -87,7 +97,7 @@ resource "aws_security_group" "backend_sg" {
   }
 
   ingress {
-    description = "Python App"
+    description = "Python/App Port"
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
@@ -95,7 +105,7 @@ resource "aws_security_group" "backend_sg" {
   }
 
   ingress {
-    description = "Java App"
+    description = "Java App Port"
     from_port   = 9090
     to_port     = 9090
     protocol    = "tcp"
@@ -108,45 +118,41 @@ resource "aws_security_group" "backend_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  tags = { Name = "backend-security_group" }
 }
 
 # ------------------------------------------------------------------
-# EC2 INSTANCES (Using Free Tier Ubuntu AMI)
+# EC2 INSTANCES (Task Nodes)
 # ------------------------------------------------------------------
 
 # Node 1: Java Node
 resource "aws_instance" "java-node" {
-  ami                    = data.aws_ami.ubuntu_latest.id
+  ami                    = data.aws_ami.java_latest.id
   instance_type          = var.project_instance_type
   subnet_id              = var.project_subnet
   vpc_security_group_ids = [aws_security_group.backend_sg.id]
   key_name               = var.project_keyname
-
-  tags = { Name = "Java-Node" } 
+  tags                   = { Name = "Java-Node" } 
 }
 
 # Node 2: Nginx Node
 resource "aws_instance" "nginx-node" {
-  ami                    = data.aws_ami.ubuntu_latest.id
+  ami                    = data.aws_ami.nginx_latest.id
   instance_type          = var.project_instance_type
   subnet_id              = var.project_subnet
   vpc_security_group_ids = [aws_security_group.web_sg.id]
   key_name               = var.project_keyname
-
-  tags = { Name = "Nginx-Node" } 
+  tags                   = { Name = "Nginx-Node" } 
 }
 
 # Node 3: Ansible Server
 resource "aws_instance" "ansible-server" {
-  ami                    = data.aws_ami.ubuntu_latest.id
+  # Using the Java base image to ensure it's a Linux environment for Ansible
+  ami                    = data.aws_ami.java_latest.id 
   instance_type          = var.project_instance_type
   subnet_id              = var.project_subnet
   vpc_security_group_ids = [aws_security_group.backend_sg.id]
   key_name               = var.project_keyname
-
-  tags = { Name = "Ansible-Server" } 
+  tags                   = { Name = "Ansible-Server" } 
 }
 
 # ------------------------------------------------------------------
